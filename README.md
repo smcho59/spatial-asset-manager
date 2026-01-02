@@ -135,3 +135,13 @@ Use QGIS to visually confirm the indexed geometry.
 3) `Test Connection` → `OK`
 4) In the Browser panel, open the connection → `public` → `items` → add `geom` (EPSG:4326)
 5) Right click the layer → `Zoom to Layer`
+
+## TODO
+- Define STAC-compliant API endpoints (Collections, Items, Search) with FastAPI.
+- Implement ingestion job orchestration (queue/worker, retry, monitoring).
+- Add asset preview pipeline (COG tiles, vector tiling, thumbnail generation).
+- Build frontend catalog UI (map + table + filters) with React and Mapbox GL JS.
+- Add auth/roles for admin vs. read-only access.
+- Implement data validation and QC (schema checks, CRS checks, missing asset detection).
+- Add observability (logging, metrics, job audit trails).
+- Create backup/restore and data lifecycle policies.
