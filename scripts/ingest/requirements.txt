@@ -1,0 +1,5 @@
+rasterio
+geopandas
+psycopg2-binary
+python-dotenv
+shapely
