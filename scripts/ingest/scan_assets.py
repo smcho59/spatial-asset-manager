@@ -2,9 +2,10 @@
 import argparse
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, Iterator, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 try:
     from dotenv import load_dotenv
@@ -22,6 +23,10 @@ from shapely.geometry import box
 EXTENSIONS = {".tif", ".tiff", ".shp", ".geojson", ".gpkg"}
 PROJ_EXTENSION = "https://stac-extensions.github.io/projection/v1.0.0/schema.json"
 FILE_EXTENSION = "https://stac-extensions.github.io/file/v2.1.0/schema.json"
+FILENAME_PATTERN = re.compile(
+    r"^(?P<year>\d{4})_(?P<region>[A-Za-z0-9]+)(?:_(?P<zone>[A-Za-z0-9]+))?_cog\.tif$",
+    re.IGNORECASE,
+)
 
 
 def load_env(project_root: Path) -> None:
@@ -158,6 +163,30 @@ def insert_items(conn, rows: List[Tuple]) -> None:
     conn.commit()
 
 
+def parse_filename(path: Path) -> Optional[Dict[str, str]]:
+    match = FILENAME_PATTERN.match(path.name)
+    if not match:
+        return None
+    zone = match.group("zone") or ""
+    return {
+        "year": match.group("year"),
+        "region": match.group("region"),
+        "zone": zone,
+    }
+
+
+def to_public_href(base_url: str, rel_path: str) -> str:
+    if not base_url:
+        return rel_path
+    return f"{base_url.rstrip('/')}/{rel_path.lstrip('/')}"
+
+
+def derive_paths(rel_path: Path, deriv_root: Path) -> Dict[str, Path]:
+    return {
+        "thumbnail": deriv_root / "thumb" / rel_path.with_suffix(".jpg"),
+    }
+
+
 def build_item_row(
     path: Path,
     rel_path: str,
@@ -166,6 +195,8 @@ def build_item_row(
     bbox: List[float],
     geom_wkt: str,
     epsg: Optional[int],
+    base_url: str,
+    deriv_root: Path,
 ) -> Tuple:
     stat = path.stat()
     media_type = detect_media_type(path)
@@ -177,16 +208,34 @@ def build_item_row(
     properties["file:size"] = stat.st_size
     stac_extensions.append(FILE_EXTENSION)
 
+    parsed = parse_filename(path)
+    if parsed:
+        properties["year"] = int(parsed["year"])
+        properties["region"] = parsed["region"]
+        properties["zone"] = parsed["zone"]
+
+    rel_path_posix = Path(rel_path).as_posix()
+    ortho_href = to_public_href(base_url, rel_path_posix)
+
     assets = {
         "data": {
-            "href": rel_path,
+            "href": ortho_href,
             "type": media_type,
             "roles": ["data"],
         }
     }
-    item_id = f"nas-{hash_path(nas_path)}"
+
+    derived = derive_paths(Path(rel_path), deriv_root)
+    thumb_path = derived["thumbnail"]
+    if thumb_path.exists():
+        assets["thumbnail"] = {
+            "href": to_public_href(base_url, f"result/thumb/{Path(rel_path).with_suffix('.jpg').as_posix()}"),
+            "type": "image/jpeg",
+            "roles": ["thumbnail"],
+        }
+    item_id = path.stem
     title = path.name
-    description = f"Indexed asset at {rel_path}"
+    description = f"Indexed asset at {rel_path_posix}"
     dt = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
     return (
         item_id,
@@ -224,6 +273,16 @@ def main() -> int:
     parser.add_argument("--db-user", default=os.getenv("POSTGRES_USER", "sam"))
     parser.add_argument("--db-password", default=os.getenv("POSTGRES_PASSWORD", "sam_password"))
     parser.add_argument("--collection-id", default=os.getenv("COLLECTION_ID", "nas-assets"))
+    parser.add_argument(
+        "--public-base-url",
+        default=os.getenv("PUBLIC_BASE_URL", ""),
+        help="Public base URL for assets (e.g., https://innopam/data)",
+    )
+    parser.add_argument(
+        "--deriv-root",
+        default=os.getenv("DERIV_ROOT", ""),
+        help="Root folder for thumbnails",
+    )
     parser.add_argument("--batch-size", type=int, default=200, help="DB existence check batch size")
     parser.add_argument("--insert-batch-size", type=int, default=100, help="Insert batch size")
     parser.add_argument("--dry-run", action="store_true", help="Scan and report without inserting")
@@ -233,6 +292,7 @@ def main() -> int:
     if not root or not root.exists():
         raise SystemExit("NAS_DATA_ROOT is not set or path does not exist.")
     nas_host_root = os.getenv("NAS_HOST_ROOT", str(root))
+    deriv_root = Path(args.deriv_root).expanduser().resolve() if args.deriv_root else root / "result"
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     logging.info("Scanning %s", root)
@@ -283,7 +343,15 @@ def main() -> int:
                     continue
                 bbox, geom_wkt, epsg = meta
                 row = build_item_row(
-                    path, rel_path, nas_path, args.collection_id, bbox, geom_wkt, epsg
+                    path,
+                    rel_path,
+                    nas_path,
+                    args.collection_id,
+                    bbox,
+                    geom_wkt,
+                    epsg,
+                    args.public_base_url,
+                    deriv_root,
                 )
             except Exception as exc:
                 logging.exception("Failed to read metadata for %s: %s", path, exc)

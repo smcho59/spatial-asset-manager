@@ -15,6 +15,17 @@ Web GIS platform to catalog, search, and preview tens of terabytes of orthophoto
 - Data standards: STAC core spec (Collections, Items, Assets) for catalog interoperability.
 - Tooling: Docker Compose for local orchestration; scripts for data ingestion, validation, and maintenance.
 
+## Roadmap (Stage 0-6)
+Implemented up to Stage 4. Stages 5-6 remain planned.
+
+- Stage 0 (Done): Inventory + mapping rules, sample coverage check (docs/stage0-mapping.md)
+- Stage 1 (Done): Static file server, HTTP range test, COG URL validation (docs/stage1-fileserver.md)
+- Stage 2 (Done): Thumbnail generation, URL check in browser/QGIS (docs/stage2-derivatives.md)
+- Stage 3 (Done): STAC ingest, properties/asset validation in DB (docs/stage3-stac.md)
+- Stage 4 (Done): STAC API endpoint, collections/search validation (docs/stage4-stac-api.md)
+- Stage 5 (Planned): QGIS UX guide and styling
+- Stage 6 (Planned): Operational automation (ingest pipeline)
+
 ## Repository Structure
 ```
 /                     # Project root
@@ -137,11 +148,12 @@ Use QGIS to visually confirm the indexed geometry.
 5) Right click the layer → `Zoom to Layer`
 
 ## TODO
-- Define STAC-compliant API endpoints (Collections, Items, Search) with FastAPI.
-- Implement ingestion job orchestration (queue/worker, retry, monitoring).
-- Add asset preview pipeline (COG tiles, vector tiling, thumbnail generation).
-- Build frontend catalog UI (map + table + filters) with React and Mapbox GL JS.
-- Add auth/roles for admin vs. read-only access.
-- Implement data validation and QC (schema checks, CRS checks, missing asset detection).
-- Add observability (logging, metrics, job audit trails).
-- Create backup/restore and data lifecycle policies.
+Priority: P0 = must-have for reliable internal ops, P1 = important/near-term, P2 = nice-to-have/later.
+- [Done][P1] Define STAC-compliant API endpoints (Collections, Items, Search) with FastAPI.
+- [Partial][P1] Add asset preview pipeline (COG tiles, vector tiling, thumbnail generation). (Thumbnails only)
+- [Planned][P0] Implement ingestion job orchestration (queue/worker, retry, monitoring).
+- [Planned][P0] Add auth/roles for admin vs. read-only access.
+- [Planned][P1] Implement data validation and QC (schema checks, CRS checks, missing asset detection).
+- [Planned][P1] Add observability (logging, metrics, job audit trails).
+- [Planned][P1] Create backup/restore and data lifecycle policies.
+- [Planned][P2] Build frontend catalog UI (map + table + filters) with React and Mapbox GL JS.
